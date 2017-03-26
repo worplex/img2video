@@ -132,6 +132,7 @@ int main(int argc, char** argv) {
     printf("Encoding %s\n",path.data());
     fipImage img;
     img.load(path.data());
+    img.flipVertical();
     if(!img.convertTo32Bits()) {
       printf("Error converting image sample to RGBA32\n");
       return -15;
@@ -147,7 +148,7 @@ int main(int argc, char** argv) {
     
     
     
-    SwsContext* scaler = sws_getContext(img.getWidth(),img.getHeight(),AV_PIX_FMT_RGBA,maxWidth,maxHeight,encodeCtx->pix_fmt,SWS_BICUBIC,0,0,0);
+    SwsContext* scaler = sws_getContext(img.getWidth(),img.getHeight(),AV_PIX_FMT_BGRA,maxWidth,maxHeight,encodeCtx->pix_fmt,SWS_BICUBIC,0,0,0);
     unsigned char* pixels = img.accessPixels();
     
     int stride = img.getWidth()*4;
@@ -158,7 +159,7 @@ int main(int argc, char** argv) {
     }
     
     
-    sws_scale(scaler,&pixels,&stride,0,0,frame->data,frame->linesize);
+    sws_scale(scaler,&pixels,&stride,0,img.getHeight(),frame->data,frame->linesize);
     sws_freeContext(scaler);
     
     int err = avcodec_send_frame(encodeCtx,frame);
