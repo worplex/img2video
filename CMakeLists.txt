@@ -1,0 +1,5 @@
+add_executable(img2video main.cpp)
+set (EXTRA_LIBS ${EXTRA_LIBS})
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I. -std=c++11 -g")
+include_directories(${EXTRA_HEADERS})
+target_link_libraries(img2video pthread dl rt freeimageplus avcodec avformat swscale avutil ${EXTRA_LIBS})
