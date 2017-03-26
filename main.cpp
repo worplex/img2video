@@ -3,6 +3,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavformat/avformat.h>
+#include <libavutil/imgutils.h>
 }
 #include <unistd.h>
 #include <fcntl.h>
@@ -84,7 +85,9 @@ int main(int argc, char** argv) {
   avio_open2(&muxer->pb,mpath.str().data(),AVIO_FLAG_WRITE | AVIO_FLAG_READ,0,0);
   
   AVStream* stream = avformat_new_stream(muxer,encodeCtx->codec);
-  
+  stream->time_base = encodeCtx->time_base;
+  AVProgram* program = av_new_program(muxer,1);
+  av_program_add_stream_index(muxer,program->id,stream->index);
   if(!stream) {
     printf("Error opening video stream for writing\n");
     return -9;
@@ -115,6 +118,8 @@ int main(int argc, char** argv) {
   int64_t pts = 0;
   
   auto mux_packet = [&](AVPacket* packet) {
+    
+    packet->stream_index = stream->index;
     av_interleaved_write_frame(muxer,packet);
     
   };
@@ -127,21 +132,26 @@ int main(int argc, char** argv) {
     printf("Encoding %s\n",path.data());
     fipImage img;
     img.load(path.data());
+    if(!img.convertTo32Bits()) {
+      printf("Error converting image sample to RGBA32\n");
+      return -15;
+    }
+    
     AVFrame* frame = av_frame_alloc();
     frame->pts = pts;
-    pts+=60;
+    pts+=60*1000;
     frame->format = encodeCtx->pix_fmt;
     frame->width = encodeCtx->width;
     frame->height = encodeCtx->height;
-    frame->linesize[0] = encodeCtx->width;
-    frame->linesize[1] = encodeCtx->width;
-    frame->linesize[2] = encodeCtx->width;
+    av_image_fill_linesizes(frame->linesize,(AVPixelFormat)frame->format,frame->width);
     
     
     
     SwsContext* scaler = sws_getContext(img.getWidth(),img.getHeight(),AV_PIX_FMT_RGBA,maxWidth,maxHeight,encodeCtx->pix_fmt,SWS_BICUBIC,0,0,0);
     unsigned char* pixels = img.accessPixels();
+    
     int stride = img.getWidth()*4;
+    
     if(av_frame_get_buffer(frame,0)) {
       printf("Failed to allocate buffer\n");
       return -2;
@@ -149,6 +159,8 @@ int main(int argc, char** argv) {
     
     
     sws_scale(scaler,&pixels,&stride,0,0,frame->data,frame->linesize);
+    sws_freeContext(scaler);
+    
     int err = avcodec_send_frame(encodeCtx,frame);
     if(err) {
       printf("Encoder failure (code %i)\n",err);
@@ -171,6 +183,9 @@ int main(int argc, char** argv) {
     
   av_interleaved_write_frame(muxer,0);
     
+  
+  av_write_trailer(muxer);
+  avformat_free_context(muxer);
   
   
 }
